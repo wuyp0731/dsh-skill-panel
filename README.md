@@ -1,128 +1,118 @@
 # dsh-skill-panel（技能面板）
 
-一个 DeepSeek Harness Web UI 插件：在左侧边栏提供「技能」入口，点击后在主区域以卡片形式列出当前会话可见的全部已安装 skill，并分为「预设技能」和「我的技能」两类。
-
-位置：`D:\Desktop\dsh_workspace\dsh-skill-panel`
+DeepSeek Harness Web UI 技能面板插件。在侧边栏提供「技能」入口，集中查看当前会话可见的已安装技能，支持分类、搜索和刷新。
 
 ## 功能
 
-- 侧边栏星形图标，排在「插件」下方、「定时任务」上方（`order: 5`）。
-- 主区域两个卡片头，点击展开/收起，默认展开「我的技能」：
-  - **预设技能**：内置（bundled）、项目 `.dsh/skills` / `.agents/skills`、自定义目录、运行时插件注册的技能；
-  - **我的技能**：`<DSH_HOME>/skills` 下的技能，Windows 上即 `C:\Users\burni\.dsh\skills\`。
-- 一次只展开一个卡片；再次点击当前卡片头会收起（两个都合上）。
-- 每个技能显示 `/名称`、描述、`whenToUse`、完整的 `SKILL.md` 路径、「仅用户可调用」标记。
-- 搜索框按名称/描述/用途过滤两个卡片，数量徽标实时更新；「刷新」重新读取目录。
-- 中英文界面，跟随 Harness 语言设置。
+- **技能分类**：分为「预设技能」和「我的技能」，默认展开「我的技能」。
+- **技能详情**：展示名称、描述、用途、`SKILL.md` 路径及「仅用户可调用」标记。
+- **搜索与刷新**：按名称、描述或用途筛选技能，手动刷新技能列表。
+- **中英文界面**：跟随 Harness 的语言设置。
 
-## 目录结构
-
-```
-dsh-skill-panel/
-├── package.json        # bundle 清单 + dsh.client 声明
-├── cordis.patch.yml    # Loader 行（插入 dsh-skill-panel）
-├── index.js            # Host 半：纯 UI 插件，apply 为空
-├── client.js           # Client 半：侧边栏图标 + 主面板 + 样式 + 字典
-├── locale/
-│   ├── zh.json         # 插件管理器中的中文标题与描述
-│   └── en.json         # 插件管理器中的英文标题与描述
-├── icon.svg            # 插件图标（原创）
-└── README.md
-```
-
-没有构建步骤，没有依赖：`client.js` 是浏览器端 ESM 工厂（`window.__ModuleLoader__.load`），`index.js` 是 Host 端 ESM 插件。
-
-## 分类规则
-
-「我的技能」= 技能的 `SKILL.md` 绝对路径位于 `<Host home>/.dsh/skills` 之下（来自 `ctx.remote.$host.home`，兼容 home 是用户目录或 `.dsh` 目录本身）；路径之外的技能全部归入「预设技能」。拿不到 Host home 时兜底匹配路径中的 `/.dsh/skills/`。
-
-## 数据来源
-
-面板通过 Host 的 `ctx.remote.skills.list({ sessionId })` 读取目录（与官方「技能引用」插件同一数据源），按当前主视图会话的视图解析：
-
-- 用户级技能（`<DSH_HOME>/skills`）对所有会话可见；
-- 项目级技能依赖会话的 cwd，所以没有打开会话时面板会提示先选择一个会话；
-- 技能内容不会加载，只读取名称、描述、路径等元数据。
+「我的技能」指用户级技能目录中的技能；内置技能、项目技能及其他来源的技能归入「预设技能」。技能列表随当前会话变化，项目级技能取决于该会话的工作目录。
 
 ## 安装
 
-### 方式一：通过 DSH Agent 的插件管理器（推荐）
+插件仓库：<https://github.com/wuyp0731/dsh-skill-panel>
 
-在 DSH 会话中让 Agent 执行插件管理器的 `install_bundle`，目标指向本目录的绝对路径：
+### 方式一：直接从 GitHub 安装（推荐）
 
+在 DSH 会话中，让 Agent 使用插件管理器安装 GitHub 仓库：
+
+```text
+请使用 plugin_manager 安装 dsh-skill-panel 插件：
+action = install_bundle
+target = github:wuyp0731/dsh-skill-panel
 ```
-用 plugin_manager 安装插件：action = install_bundle，target = D:\Desktop\dsh_workspace\dsh-skill-panel
-```
 
-安装成功后返回 `application: applied`，刷新 Web 页面即可在侧边栏看到「技能」图标。该方式会自动完成 pnpm 链接、写入 profile 的 bundle 列表并应用 `cordis.patch.yml`。
+插件管理器会拉取 GitHub 上的最新提交，安装并启用 bundle，无需手动修改 profile 配置。
 
-### 方式二：CLI 手动安装
-
-先确认当前 profile（默认 `desktop`）：
+也可以改用 CLI 完成同样的两步：
 
 ```powershell
-$env:DSH_PROFILE   # 例如 desktop
+# 1) 安装到 profile（默认 desktop，可用 $env:DSH_PROFILE 查看当前 profile）
+dsh plugin --profile desktop add github:wuyp0731/dsh-skill-panel
 ```
 
-1. 把包链接进 profile：
+然后在 profile 的 `package.json`（例如 `C:\Users\burni\.dsh\profiles\desktop\package.json`）的 `dsh.profile.bundles` 数组末尾追加 `"dsh-skill-panel"`，并重启 DSH。
 
-   ```powershell
-   dsh plugin --profile desktop add D:\Desktop\dsh_workspace\dsh-skill-panel
+### 方式二：从本地源码目录安装（开发 / 离线）
+
+1. 获取插件。将仓库克隆到你希望存放插件的位置：
+
+   ```sh
+   git clone https://github.com/wuyp0731/dsh-skill-panel.git
    ```
 
-2. 在 profile 的 `package.json` 中登记 bundle。文件位于
-   `C:\Users\burni\.dsh\profiles\desktop\package.json`，在 `dsh.profile.bundles`
-   数组末尾追加：
+   也可以在 GitHub 仓库页面选择 **Code → Download ZIP**，下载后解压。
 
-   ```json
-   "dsh-skill-panel"
+2. 通过 DSH Agent 安装。将下面的占位符替换为克隆或解压后插件目录的绝对路径：
+
+   ```text
+   请使用 plugin_manager 安装 dsh-skill-panel 插件：
+   action = install_bundle
+   target = <插件目录的绝对路径>
    ```
 
-3. 重启 DSH，然后刷新 Web 页面。
+   目标目录应直接包含 `package.json` 和 `cordis.patch.yml`。本地目录安装以 `link:` 方式链接，修改源码后无需重新安装依赖。
 
-> `dsh plugin` 是 pnpm 的透传命令，只负责安装依赖；bundle 的启用与否由
-> `dsh.profile.bundles` 决定，两步都不能少。
+### 打开技能面板
 
-## 启用、停用与卸载
+安装成功后刷新 Harness Web 页面，点击左侧边栏的「技能」入口。先打开或选择一个会话，即可查看该会话可见的技能。
 
-- **停用 / 启用**：在「设置 → 插件」页面切换，或让 Agent 调用
-  `plugin_manager` 的 `set_bundle`（`target: dsh-skill-panel`，`enabled: false/true`）。
-- **卸载**：让 Agent 调用 `plugin_manager` 的 `remove_bundle`（`target: dsh-skill-panel`），
-  或在 CLI 中：
+## 使用
 
-  ```powershell
-  dsh plugin --profile desktop remove dsh-skill-panel
-  ```
+- 点击「预设技能」或「我的技能」标题展开列表，再次点击可收起；同一时间只展开一组。
+- 在搜索框输入关键词，按名称、描述或用途筛选。
+- 点击「刷新」重新读取当前会话的技能目录。
 
-  随后从 profile 的 `dsh.profile.bundles` 中删除 `"dsh-skill-panel"` 并重启。
+面板通过 Harness 的技能接口读取元数据，不会执行技能，也不会加载 `SKILL.md` 正文。
 
-## 开发与热更新
+## 更新与卸载
 
-本插件以 pnpm `link:` 方式安装，修改的是本目录中的源文件，无需重新构建：
+**更新**：
 
-- **Client 半（`client.js`）**：修改后重新执行一次「卸载 + 安装」
-  （`remove_bundle` → `install_bundle`），让 Host 重建模块图，然后刷新页面；
-- **Host 半（`index.js`）**：重启 DSH 生效；
-- 桌面端页面与插件共享同一工作区，安装脚本会直接链接本目录。
+- 从 GitHub 安装的版本：让 DSH Agent 先 `remove_bundle`（`target: dsh-skill-panel`），再重新 `install_bundle`（`target: github:wuyp0731/dsh-skill-panel`），以拉取最新提交；随后刷新 Web 页面。
+- 本地目录安装的版本：在插件源码目录执行 `git pull`，或下载并解压新版源码，再通过插件管理器重新安装；随后刷新 Web 页面。
 
-调试约定：
+如修改涉及 Host 端代码，还需重启 Harness。
 
-- 界面文本统一走 Client locale 服务（`ctx.locale`），字典在 `client.js` 顶部；
-- 样式只使用 `--dsw-alias-*` 主题 token，避免硬编码颜色；
-- 资源注册都在 `apply(ctx)` 内通过 `ctx.effect` / `ctx.slots.inject` 完成，可随插件卸载回收。
+**启用或停用**：在「设置 → 插件」中切换，也可以让 DSH Agent 调用 `plugin_manager` 的 `set_bundle`，目标为 `dsh-skill-panel`。
+
+**卸载**：让 DSH Agent 使用插件管理器卸载 `dsh-skill-panel`（`remove_bundle`）。
+
+## 开发
+
+插件无需单独构建，使用 Harness 提供的运行环境和服务。
+
+```text
+dsh-skill-panel/
+├── package.json        # 插件清单
+├── cordis.patch.yml    # bundle 加载配置
+├── index.js            # Host 端入口
+├── client.js           # 技能面板、样式及界面字典
+├── locale/
+│   ├── zh.json         # 插件管理器中文信息
+│   └── en.json         # 插件管理器英文信息
+├── icon.svg            # 插件图标
+└── README.md
+```
+
+- `client.js` 通过 `window.__ModuleLoader__.load` 注册客户端模块。
+- 技能数据来自 `ctx.remote.skills.list({ sessionId })`。
+- 界面文本使用 `ctx.locale`，样式使用 `--dsw-alias-*` 主题变量。
+- 用户级技能目录根据 Host 提供的 home 路径识别；无法获取时，按路径中的 `/.dsh/skills/` 识别。
 
 ## 兼容性
 
-- DeepSeek Harness 0.2.x Web（`dsh.client.platform: "web"`）；
-- 依赖 Host 的 `skills` Remote（`ctx.remote.skills`）以及 Client 服务
-  `slots`、`sessions`、`remote`、`locale`；
-- 插槽：`sidebar.panellist`（id `skills`）与 `main`（key `skills`）。
+适用于 DeepSeek Harness 0.2.x 的 Web 界面，依赖 Host 的 `skills` Remote，以及客户端的 `slots`、`sessions`、`remote` 和 `locale` 服务。
 
-## 故障排查
+## 常见问题
 
 | 现象 | 处理 |
-|---|---|
-| 侧边栏没有技能图标 | 刷新页面；确认 profile 的 `dsh.profile.bundles` 含 `dsh-skill-panel`；查看浏览器控制台是否有 slot 崩溃信息 |
-| 面板提示没有会话 | 先打开/选择一个会话——项目级技能依赖会话 cwd |
-| 分类不符合预期 | 展开技能行核对 `SKILL.md` 的实际路径；「我的技能」按 `<DSH_HOME>/skills` 前缀判断 |
-| 修改代码后界面没变 | 重新「卸载 + 安装」重建模块图，再刷新页面 |
+| --- | --- |
+| 侧边栏没有「技能」入口 | 确认插件已安装并启用，然后刷新页面 |
+| 面板提示没有会话 | 先打开或选择一个会话 |
+| 找不到项目技能 | 确认当前会话的工作目录对应目标项目，再点击「刷新」 |
+| 分类不符合预期 | 检查技能路径是否位于用户级技能目录中 |
+| 更新后界面未变化 | 通过插件管理器重新安装插件，再刷新页面；必要时重启 Harness |

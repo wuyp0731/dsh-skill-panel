@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "description": "Sidebar skill panel: lists every installed skill visible to the active session.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wuyp0731/dsh-skill-panel.git"
+  },
   "type": "module",
   "exports": {
     ".": "./index.js",
